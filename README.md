@@ -46,12 +46,3 @@ Seul `courbe_performance.py` a besoin de matplotlib : `pip install -r requiremen
 
 Ligne 1 : le seuil *d*. Lignes suivantes : un point par ligne, deux flottants
 séparés par une virgule.
-
-## Notes
-
-- `geo/` : bibliothèque géométrique fournie (Point, distance, affichage SVG).
-- Amélioration possible : la recherche de voisins scanne tous les points (O(n²)) ;
-  une grille spatiale de pas *d* rapprocherait du linéaire.
-- Détail des mesures et de la méthode : `rapport.pdf`.
-```
-
