@@ -33,8 +33,6 @@ python generates_pts.py 500 exemple_5.pts 0.08   # génère un jeu de points
 python test_connectes.py                         # test : hybride == récursif
 ```
 
-Seul `courbe_performance.py` a besoin de matplotlib : `pip install -r requirements.txt`.
-
 ## Format des fichiers `.pts`
 
 ```
