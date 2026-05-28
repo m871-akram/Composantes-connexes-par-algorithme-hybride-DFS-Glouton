@@ -1,18 +1,12 @@
 #!/usr/bin/env python3
 """
-Compute the sizes of all connected components using a Hybrid Greedy + DFS strategy.
+Composantes connexes par DFS hybride (glouton + DFS itératif).
 
-The algorithm seeds each component from an unvisited point and uses a two-phase
-traversal:
-
-1. **Greedy phase** – eagerly expands neighbours until the component exceeds *k*
-   nodes.  Small isolated clusters are fully handled here without entering the
-   heavier counting loop.
-2. **Full DFS phase** – drains the remaining stack iteratively, incrementing only
-   a counter (no index list kept), which is memory-efficient for large components.
-
-Seeds are evaluated sequentially to guarantee correctness: a component must be
-fully explored before the next unvisited seed can be safely identified.
+On part de chaque point non visité et on explore ses voisins (distance <= seuil).
+Phase 1 (glouton) : on garde la liste des indices jusqu'à k points.
+Phase 2 (DFS) : on continue en comptant juste la taille (moins de mémoire).
+Le découpage en deux phases ne change pas la complexité O(n^2), mais la version
+itérative évite la limite de récursion de Python.
 """
 
 from sys import argv
@@ -22,27 +16,15 @@ from geo.point import Point
 
 
 def load_instance(filename: str) -> Tuple[float, List[Point]]:
-    """Load a ``.pts`` dataset file.
-
-    The file format is::
-
-        <distance_threshold>
-        <x1>, <y1>
-        <x2>, <y2>
-        ...
-
-    Args:
-        filename: Path to the ``.pts`` file.
-
-    Returns:
-        A tuple ``(distance, points)`` where *distance* is the maximum
-        Euclidean distance that connects two points into the same component,
-        and *points* is the list of parsed :class:`~geo.point.Point` objects.
-    """
+    """Lit un fichier .pts (1re ligne = distance, puis un point par ligne)."""
     with open(filename, "r") as instance_file:
         lines = iter(instance_file)
-        distance = float(next(lines))
-        points = [Point([float(f) for f in line.split(",")]) for line in lines]
+        distance = float(next(lines).strip())
+        points = [
+            Point([float(f) for f in line.split(",")])
+            for line in lines
+            if line.strip()
+        ]
 
     return distance, points
 
@@ -54,45 +36,21 @@ def compute_cluster(
     visited: List[bool],
     k: int = 8,
 ) -> int:
-    """Compute the size of one connected component from a seed point.
-
-    Uses a two-phase hybrid strategy:
-
-    * **Phase 1 — Greedy expansion**: pop nodes from a stack and mark all
-      reachable neighbours as visited.  Stop as soon as the component has more
-      than *k* nodes — tiny isolated clusters are handled entirely here.
-    * **Phase 2 — Full iterative DFS**: for larger components, drain the
-      remaining stack while only incrementing a counter (no index list kept in
-      memory), which is more memory-efficient at scale.
-
-    Args:
-        start_index: Index of the seed point in *points*.
-        distance: Maximum Euclidean distance that defines an edge.
-        points: Complete list of points in the dataset.
-        visited: Shared boolean list managed across worker processes; ``True``
-            means the point has already been claimed by a component.
-        k: Greedy-phase threshold.  When the component grows beyond *k* nodes
-            the algorithm switches to the pure counting DFS.
-
-    Returns:
-        Size of the discovered component, or ``0`` if *start_index* was already
-        visited by another worker process before this call began.
-    """
+    """Taille de la composante connexe qui contient le point start_index."""
     n = len(points)
 
-    # Caller guarantees start_index is unvisited, but guard defensively.
+    # normalement déjà non visité, mais on vérifie quand même
     if visited[start_index]:
         return 0
 
     visited[start_index] = True
-    component: List[int] = [start_index]  # index accumulator for phase 1
+    component: List[int] = [start_index]  # indices trouvés (phase 1)
     stack: List[int] = [start_index]
 
-    # --- Phase 1: Greedy expansion ---
-    # Keep a full index list so we can restart DFS from any already-visited node.
+    # Phase 1 : glouton, on garde la liste des indices
     while stack:
         if len(component) > k:
-            break  # hand off to full DFS — component is large enough
+            break  # composante assez grosse, on passe au DFS
         current = stack.pop()
         for neighbour in range(n):
             if (
@@ -103,8 +61,7 @@ def compute_cluster(
                 component.append(neighbour)
                 stack.append(neighbour)
 
-    # --- Phase 2: Full iterative DFS ---
-    # Only the running count is maintained; individual indices are discarded.
+    # Phase 2 : DFS, on compte seulement la taille
     component_size = len(component)
     while stack:
         current = stack.pop()
@@ -123,44 +80,24 @@ def compute_cluster(
 def print_components_sizes(
     distance: float,
     points: List[Point],
+    k: int = 8,
     verbose: bool = True,
 ) -> List[int]:
-    """Discover all connected components and (optionally) print their sizes.
+    """Trouve toutes les composantes et affiche leurs tailles (ordre décroissant).
 
-    Iterates sequentially over unvisited seed points, calling
-    :func:`compute_cluster` for each one.  Sequential seed evaluation is
-    required for correctness: only after one component is fully explored can we
-    be sure that the next unvisited point is a genuine new seed.
-
-    Note:
-        Parallelising seed dispatch (e.g. with ``multiprocessing.Pool``) is
-        unsound for this problem because workers race to claim the same
-        neighbours, fragmenting components that should be large.  The algorithmic
-        value here lies in the two-phase hybrid DFS inside
-        :func:`compute_cluster`, not in multi-process parallelism.
-
-    Args:
-        distance: Maximum Euclidean distance that connects two points.
-        points: Complete list of points in the dataset.
-        verbose: When ``True``, print the sorted sizes to stdout in the form
-            ``[size1, size2, ...]``.
-
-    Returns:
-        Component sizes sorted in descending order.
+    On traite les graines une par une : il faut finir une composante avant de
+    chercher la suivante, sinon on ne sait pas si un point est une vraie graine.
     """
     n = len(points)
     if n == 0:
         return []
 
-    # Plain list: visited flags shared within a single process (no IPC overhead)
     visited: List[bool] = [False] * n
 
     sizes: List[int] = []
     for i in range(n):
         if not visited[i]:
-            # Each seed is fully explored before advancing — this guarantees
-            # no two calls ever race over the same point.
-            size = compute_cluster(i, distance, points, visited)
+            size = compute_cluster(i, distance, points, visited, k)
             if size > 0:
                 sizes.append(size)
 
@@ -173,7 +110,7 @@ def print_components_sizes(
 
 
 def main() -> None:
-    """Entry point: process one or more ``.pts`` files passed on the command line."""
+    """Traite les fichiers .pts passés en argument."""
     instances = argv[1:]
     if not instances:
         print("Usage: python connectes.py file1.pts file2.pts ...")

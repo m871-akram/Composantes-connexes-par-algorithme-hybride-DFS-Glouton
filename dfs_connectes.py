@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-Classic recursive DFS implementation for computing connected-component sizes.
+DFS récursif classique (version de référence, comparée à connectes.py).
 
-This module provides the baseline algorithm against which the Hybrid Greedy+DFS
-approach in ``connectes.py`` is benchmarked.  Two points belong to the same
-component when their Euclidean distance is at most the threshold stored in the
-``.pts`` file.
+Deux points sont connectés si leur distance euclidienne est <= au seuil du fichier.
 """
 
 from sys import argv
@@ -15,23 +12,7 @@ from geo.point import Point
 
 
 def load_instance(filename: str) -> Tuple[Optional[float], List[Point]]:
-    """Load a ``.pts`` dataset file.
-
-    The file format is::
-
-        <distance_threshold>
-        <x1>, <y1>
-        <x2>, <y2>
-        ...
-
-    Args:
-        filename: Path to the ``.pts`` file.
-
-    Returns:
-        A tuple ``(distance, points)`` on success.  Returns ``(None, [])``
-        when the file cannot be read so callers can detect failures without
-        catching exceptions.
-    """
+    """Lit un fichier .pts. Renvoie (None, []) si le fichier est illisible."""
     try:
         with open(filename, "r") as instance_file:
             lines = iter(instance_file)
@@ -48,25 +29,10 @@ def load_instance(filename: str) -> Tuple[Optional[float], List[Point]]:
 
 
 def compute_component_sizes_dfs(distance: float, points: List[Point]) -> List[int]:
-    """Compute connected-component sizes with a classic recursive DFS.
+    """Tailles des composantes avec un DFS récursif (ordre décroissant).
 
-    Starting from each unvisited point a depth-first traversal explores all
-    reachable neighbours (i.e. those within *distance*) and collects them into
-    a component.  Visited points are removed from the working copy so they are
-    never seeded again.
-
-    Note:
-        Python's default recursion limit (``sys.setrecursionlimit``) may be
-        exceeded on large, densely connected datasets.  For those cases use the
-        iterative hybrid implementation in :mod:`connectes`.
-
-    Args:
-        distance: Maximum Euclidean distance that defines an edge between two
-            points.
-        points: Complete list of points in the dataset.
-
-    Returns:
-        List of component sizes sorted in descending order.
+    Attention : sur de grosses composantes denses on peut dépasser la limite de
+    récursion de Python. Dans ce cas utiliser la version itérative (connectes.py).
     """
     if not points:
         print("[]")
@@ -79,34 +45,21 @@ def compute_component_sizes_dfs(distance: float, points: List[Point]) -> List[in
         all_points: List[Point],
         visited: Optional[List[Point]] = None,
     ) -> List[Point]:
-        """Recursively collect all points reachable from *seed*.
-
-        Args:
-            seed: The point currently being explored.
-            all_points: Complete point list used for neighbour lookup.
-            visited: Accumulator of points already confirmed in this component.
-                Initialised to ``[seed]`` on the first call.
-
-        Returns:
-            Final list of every point in the component that contains *seed*.
-        """
+        # récupère récursivement tous les points reliés à seed
         if visited is None:
             visited = [seed]
         for candidate in all_points:
-            # A candidate joins this component if it is within reach and not
-            # yet assigned — checking membership via ``not in`` is O(n) but
-            # acceptable for the dataset sizes targeted here.
+            # le "not in" est en O(n), mais ok pour ces tailles de données
             if seed.distance_to(candidate) <= distance and candidate not in visited:
                 visited.append(candidate)
                 _dfs(candidate, all_points, visited)
         return visited
 
     component_id = 0
-    remaining = points.copy()  # working copy — shrinks as components are found
+    remaining = points.copy()  # copie de travail, on enlève les points trouvés
     while remaining:
         seed = remaining[0]
         components[component_id] = _dfs(seed, points)
-        # Remove every discovered point from the unvisited pool
         for point in components[component_id]:
             if point in remaining:
                 remaining.remove(point)
@@ -123,7 +76,7 @@ def compute_component_sizes_dfs(distance: float, points: List[Point]) -> List[in
 
 
 def main() -> None:
-    """Entry point: process one or more ``.pts`` files passed on the command line."""
+    """Traite les fichiers .pts passés en argument."""
     if len(argv) < 2:
         print("Usage: python dfs_connectes.py file.pts")
         return

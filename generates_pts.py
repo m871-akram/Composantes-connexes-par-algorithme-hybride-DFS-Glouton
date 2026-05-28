@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
 """
-Generate synthetic ``.pts`` dataset files with uniformly random 2D points.
+Génère un fichier .pts avec des points 2D aléatoires dans [0,1] x [0,1].
 
-Each point is drawn independently from [0, 1] × [0, 1].  The output file
-starts with the distance threshold on the first line, followed by one
-``x, y`` coordinate pair per line.
-
-Usage::
-
-    python generates_pts.py <num_points> <output_file> [distance]
-
-Example::
-
-    python generates_pts.py 200 exemple_5.pts 0.05
+Usage : python generates_pts.py <nb_points> <fichier_sortie> [distance]
+Exemple : python generates_pts.py 200 exemple_5.pts 0.05
 """
 
 import os
@@ -21,18 +12,9 @@ import sys
 
 
 def generate_pts_file(filename: str, num_points: int, distance: float = 0.1) -> None:
-    """Write a ``.pts`` file containing random 2D points.
-
-    Args:
-        filename: Output file path (absolute or relative to the script directory).
-        num_points: Number of random points to generate.
-        distance: Distance threshold written to the first line of the file.
-            Two points whose Euclidean distance is ≤ this value will be
-            considered connected.  Defaults to ``0.1``.
-    """
+    """Écrit un fichier .pts : 1re ligne = distance, puis les points."""
     with open(filename, "w") as f:
-        # First line: the distance threshold consumed by the algorithm scripts
-        f.write(f"{distance}\n")
+        f.write(f"{distance}\n")  # première ligne : le seuil de distance
         for _ in range(num_points):
             x = random.random()
             y = random.random()
@@ -42,7 +24,7 @@ def generate_pts_file(filename: str, num_points: int, distance: float = 0.1) -> 
 
 
 def main() -> None:
-    """Parse command-line arguments and generate the ``.pts`` file."""
+    """Lit les arguments et génère le fichier."""
     if len(sys.argv) < 3:
         print("Usage: python generates_pts.py <num_points> <output_file> [distance]")
         sys.exit(1)
@@ -51,8 +33,7 @@ def main() -> None:
     output_file = sys.argv[2]
     distance = float(sys.argv[3]) if len(sys.argv) > 3 else 0.1
 
-    # Resolve relative paths against the script's own directory so the file
-    # lands next to the other example datasets regardless of the working directory.
+    # chemin relatif -> on le met à côté du script
     if not os.path.isabs(output_file):
         output_file = os.path.join(os.path.dirname(__file__), output_file)
 

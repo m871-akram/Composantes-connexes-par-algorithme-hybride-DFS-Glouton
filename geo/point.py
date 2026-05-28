@@ -49,11 +49,6 @@ class Point:
         Returns:
             Non-negative Euclidean distance between the two points.
         """
-        if self < other:
-            # Delegate to the other point so that the expensive branch is only
-            # computed once regardless of call order.
-            return other.distance_to(self)
-
         total = 0.0
         for c1, c2 in zip(self.coordinates, other.coordinates):
             diff = c1 - c2
@@ -146,15 +141,3 @@ class Point:
 
     def __repr__(self) -> str:
         return "Point([" + ", ".join(str(c) for c in self.coordinates) + "])"
-
-    def __lt__(self, other: "Point") -> bool:
-        """Lexicographical ordering used to guarantee a canonical call direction
-        in :meth:`distance_to`.
-
-        Args:
-            other: Point to compare against.
-
-        Returns:
-            ``True`` if this point is lexicographically smaller than *other*.
-        """
-        return self.coordinates < other.coordinates

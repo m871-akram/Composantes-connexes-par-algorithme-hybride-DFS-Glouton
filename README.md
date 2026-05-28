@@ -1,126 +1,127 @@
-# Hybrid DFS & Greedy Algorithm for Connected Components in 2D Point Clouds
+# Composantes connexes par algorithme hybride DFS / Glouton
 
-Given a set of 2D points and a distance threshold *d*, two points are
-**connected** when their Euclidean distance is ≤ *d*.  The goal is to
-partition the entire point cloud into its **connected components** and report
-the size of each one.
+On a un ensemble de points 2D et un seuil de distance *d*. Deux points sont
+connectés quand leur distance euclidienne est <= *d*. Le but du projet est de
+trouver les composantes connexes (les "paquets" de points reliés entre eux) et
+d'afficher la taille de chacune.
 
-This is a classical problem in computational geometry and graph theory with
-applications in clustering, spatial data analysis, and network topology.
+## Les deux algorithmes
 
----
+### 1. DFS récursif — `dfs_connectes.py`
 
-## Approach
+Un DFS récursif classique. On part d'un point non visité, on visite tous ses
+voisins de proche en proche, et on obtient une composante. Simple et correct,
+mais sur de grosses composantes denses on peut dépasser la limite de récursion
+de Python.
 
-Two algorithms are implemented and benchmarked head-to-head:
+### 2. DFS hybride glouton + itératif — `connectes.py`
 
-### 1. Classic Recursive DFS (`dfs_connectes.py`)
+La même idée, mais en itératif (une pile au lieu de la récursion), en deux
+phases :
 
-A straightforward recursive depth-first search.  Starting from each unvisited
-seed point the algorithm visits all reachable neighbours transitively, building
-one component at a time.  Simple and correct, but single-threaded and
-susceptible to Python's recursion limit on large dense datasets.
+| Phase | Ce qu'on fait | Quand on s'arrête |
+|-------|---------------|-------------------|
+| Glouton | on empile les voisins en gardant la liste des indices | la composante dépasse *k* points (k = 8 par défaut) |
+| DFS | on vide la pile en comptant juste la taille | la pile est vide |
 
-### 2. Hybrid Greedy + Iterative DFS (`connectes.py`) ★
+À savoir :
 
-An optimised two-phase strategy that resolves each component with a
-hybrid traversal, avoiding the recursion-depth limits of the classic DFS:
+- Les deux phases font le même parcours : le découpage est surtout pédagogique,
+  la complexité reste O(n²) dans les deux cas.
+- La phase de comptage ne garde qu'un compteur (pas la liste des points), donc
+  moins de mémoire sur les grosses composantes.
+- Comme c'est itératif, on évite la limite de récursion du DFS récursif.
 
-| Phase | Strategy | When it stops |
-|-------|----------|---------------|
-| **Greedy** | Eagerly push all reachable neighbours onto a stack, keeping the full index list | Component exceeds *k* nodes (default *k = 8*) |
-| **Full DFS** | Drain the remaining stack iteratively, incrementing only a size counter | Stack is empty |
+> Pourquoi pas du multiprocessing ? Parce que le problème est séquentiel : il
+> faut finir une composante avant de chercher la graine suivante. Si plusieurs
+> processus se partageaient les graines, ils pourraient revendiquer le même
+> voisin en même temps et casser une grosse composante en morceaux.
 
-**Why this is efficient:**
-- Small isolated clusters are fully resolved in the cheap greedy phase without
-  entering the heavier counting loop.
-- Large components transition seamlessly to the memory-efficient iterative DFS,
-  which stores only the stack and a counter — not the full member list.
-- The iterative stack-based DFS is immune to Python's recursion limit, making
-  it safe for arbitrarily large components.
+> Piste d'amélioration : pour l'instant on compare chaque point à tous les
+> autres, d'où le O(n²). En rangeant les points dans une grille de cases de
+> taille *d* (et en ne regardant que les 9 cases autour), on se rapprocherait du
+> linéaire sur les gros jeux de données. Pas fait ici pour garder le code court.
 
-> **Design note on parallelism:** connected-component discovery is inherently
-> sequential — a component must be fully explored before the next unvisited seed
-> can be safely identified.  Dispatching seeds in parallel (e.g. via
-> `multiprocessing.Pool`) introduces a race condition where two workers
-> simultaneously claim the same neighbour, fragmenting large components.  The
-> algorithmic value of this implementation lies in the two-phase hybrid DFS, not
-> in multi-process parallelism.
-
-## Project Structure
+## Structure du projet
 
 ```
 .
-├── connectes.py           # Hybrid Greedy+DFS algorithm (multiprocessing)
-├── dfs_connectes.py       # Classic recursive DFS baseline
-├── courbe_performance.py  # Benchmark & visualisation tool
-├── generates_pts.py       # Random .pts dataset generator
-├── test.py                # Multiprocessing demo (sum of factorials)
-├── exemple_1.pts          # 21 points  — distance threshold 0.15
-├── exemple_2.pts          # 41 points  — distance threshold 0.15
-├── exemple_3.pts          # 101 points — distance threshold 0.05
-├── exemple_4.pts          # 201 points — distance threshold 0.10
-├── rapport.pdf            # Detailed technical analysis report
-└── geo/                   # Geometric primitives library
+├── connectes.py           # DFS hybride glouton + itératif
+├── dfs_connectes.py       # DFS récursif (version de référence)
+├── courbe_performance.py  # comparaison des temps + courbe
+├── generates_pts.py       # générateur de fichiers .pts aléatoires
+├── test_connectes.py      # test : hybride == récursif
+├── exemple_1.pts          # 20 points  — seuil 0.15
+├── exemple_2.pts          # 40 points  — seuil 0.15
+├── exemple_3.pts          # 100 points — seuil 0.05
+├── exemple_4.pts          # 200 points — seuil 0.10
+├── requirements.txt       # dépendances (matplotlib)
+├── rapport.pdf            # rapport détaillé
+└── geo/                   # bibliothèque géométrique fournie
     ├── __init__.py
-    ├── point.py           # N-dimensional Point with Euclidean distance
-    ├── quadrant.py        # Axis-aligned bounding box
-    ├── segment.py         # Oriented line segment
-    └── tycat.py           # SVG rendering & Terminology display
+    ├── point.py           # Point + distance euclidienne
+    ├── quadrant.py        # boîte englobante
+    ├── segment.py         # segment
+    └── tycat.py           # affichage SVG (Terminology)
 ```
 
----
+## Lancer les algorithmes
 
-## Running the algorithms
-
-**Classic DFS on a single file:**
+DFS récursif sur un fichier :
 ```bash
 python dfs_connectes.py exemple_1.pts
-# exemple_1.pts (21 points)
-# [7, 5, 4, 3, 2]
+# exemple_1.pts (20 points)
+[5, 4, 2, 2, 2, 2, 1, 1, 1]
 ```
 
-**Hybrid Greedy-DFS on multiple files:**
+DFS hybride sur plusieurs fichiers :
 ```bash
 python connectes.py exemple_1.pts exemple_2.pts
-# exemple_1.pts (21 points)
-# [7, 5, 4, 3, 2]
-# exemple_2.pts (41 points)
-# [10, 8, 6, 5, 4, 3, 3, 2]
+# exemple_1.pts (20 points)
+[5, 4, 2, 2, 2, 2, 1, 1, 1]
+# exemple_2.pts (40 points)
+[11, 6, 4, 3, 3, 3, 2, 2, 2, 1, 1, 1, 1]
 ```
 
-**Benchmark both algorithms and plot performance curves:**
+La sortie est la liste des tailles des composantes, triée du plus grand au plus
+petit.
+
+Comparer les deux algos et tracer la courbe :
 ```bash
 python courbe_performance.py
 ```
+Ça trouve tous les fichiers `exemple_*.pts`, lance les deux algos sur chacun,
+affiche les temps et ouvre une courbe matplotlib.
 
-This auto-detects all `exemple_*.pts` files, runs both algorithms on each,
-prints timing results, and opens an interactive `matplotlib` plot.
-
-**Generate a new synthetic dataset:**
+Générer un nouveau jeu de points :
 ```bash
-# 500 random points with distance threshold 0.08
+# 500 points aléatoires, seuil 0.08
 python generates_pts.py 500 exemple_5.pts 0.08
 ```
+Arguments : `<nb_points> <fichier_sortie> [seuil]` (seuil = 0.1 par défaut).
 
-Arguments: `<num_points>` `<output_file>` `[distance_threshold]`
-(distance defaults to `0.1` when omitted).
+Lancer le test :
+```bash
+python test_connectes.py   # ou : pytest
+```
 
----
+> Seul `courbe_performance.py` a besoin d'une dépendance externe (matplotlib) :
+> `pip install -r requirements.txt`. Les deux algos tournent avec la
+> bibliothèque standard.
 
-## `.pts` File Format
+## Format des fichiers `.pts`
 
 ```
-<distance_threshold>
+<seuil_de_distance>
 <x1>, <y1>
 <x2>, <y2>
 ...
 ```
 
-- **Line 1** — floating-point distance threshold *d*.
-- **Lines 2 +** — one point per line, two comma-separated floats.
+- Ligne 1 : le seuil de distance *d* (un flottant).
+- Lignes suivantes : un point par ligne, deux flottants séparés par une virgule.
 
-Example (excerpt from `exemple_1.pts`):
+Exemple (début de `exemple_1.pts`) :
 ```
 0.15
 0.2252545216501013, 0.12013009489606818
@@ -128,8 +129,6 @@ Example (excerpt from `exemple_1.pts`):
 0.29367221887978456, 0.6844833441065136
 ```
 
----
+## Résultats
 
-## Results
-
-The full quantitative analysis and methodology are documented in `rapport.pdf`.
+Le détail des mesures et de la méthode est dans `rapport.pdf`.
